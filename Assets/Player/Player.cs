@@ -62,6 +62,7 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        // Никаких пауэр-стопов и return! Все системы работают параллельно.
         HandleTimers();
         HandleInput();
         HandleMovement();
@@ -111,11 +112,14 @@ public class PlayerController : MonoBehaviour
 
         bool isPlayerGrounded = CheckIfGrounded();
 
+        // Модифицируем: считываем мышь для рывка и спринта ТОЛЬКО если Alt НЕ зажат
+        bool isAltPressed = ThirdPersonCamera.IsCursorUnlocked;
+
         bool isDashPressedThisFrame = (keyboard != null && keyboard.leftShiftKey.wasPressedThisFrame) ||
-                                      (mouse != null && mouse.rightButton.wasPressedThisFrame);
+                                      (!isAltPressed && mouse != null && mouse.rightButton.wasPressedThisFrame);
 
         bool isSprintHeld = (keyboard != null && keyboard.leftShiftKey.isPressed) ||
-                            (mouse != null && mouse.rightButton.isPressed);
+                            (!isAltPressed && mouse != null && mouse.rightButton.isPressed);
 
         // 1. ЛОГИКА РЫВКОВ
         if (isDashPressedThisFrame && cooldownTimer <= 0 && isPlayerGrounded)

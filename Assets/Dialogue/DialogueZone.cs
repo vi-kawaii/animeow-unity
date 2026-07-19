@@ -37,7 +37,8 @@ public class DialogueZone : MonoBehaviour
 
             if (DialogueManager.Instance != null)
             {
-                DialogueManager.Instance.HideInteractionButton();
+                // ИСПРАВЛЕНО: передаем себя (this), чтобы менеджер знал, какую зону закрывать
+                DialogueManager.Instance.HideInteractionButton(this);
             }
         }
     }
@@ -47,7 +48,9 @@ public class DialogueZone : MonoBehaviour
         if (isPlayerInside && DialogueManager.Instance != null)
         {
             DialogueManager.Instance.StartDialogue(dialogueTextFile);
-            DialogueManager.Instance.HideInteractionButton();
+
+            // ИСПРАВЛЕНО: добавляем (this), чтобы убрать ошибку CS7036
+            DialogueManager.Instance.HideInteractionButton(this);
         }
     }
 }

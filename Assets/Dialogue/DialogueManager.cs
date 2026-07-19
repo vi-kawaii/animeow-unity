@@ -1,14 +1,12 @@
 using UnityEngine;
-using UnityEngine.UIElements; // Важно для UI Toolkit
+using UnityEngine.UIElements;
 
 public class DialogueManager : MonoBehaviour
 {
-    // Глобальная статическая ссылка для всех зон и нод
     public static DialogueManager Instance { get; private set; }
 
     private PanelRenderer panelRenderer;
 
-    // Ссылки на элементы UI
     private Button interactButton;
     private VisualElement dialogueBox;
 
@@ -24,7 +22,6 @@ public class DialogueManager : MonoBehaviour
         }
         Instance = this;
 
-        // Ищем PanelRenderer на дочерних объектах
         panelRenderer = GetComponentInChildren<PanelRenderer>();
 
         if (panelRenderer == null)
@@ -37,7 +34,6 @@ public class DialogueManager : MonoBehaviour
     {
         if (panelRenderer != null)
         {
-            // НОВЫЙ СТАНДАРТ UNITY 6: Подписываемся на событие загрузки/перезагрузки UI
             panelRenderer.RegisterUIReloadCallback(OnUIReloaded);
         }
     }
@@ -46,39 +42,36 @@ public class DialogueManager : MonoBehaviour
     {
         if (panelRenderer != null)
         {
-            // Обязательно отписываемся, чтобы не было утечек памяти
             panelRenderer.UnregisterUIReloadCallback(OnUIReloaded);
         }
 
-        // Отписываемся от клика кнопки, если она существовала
         if (interactButton != null)
         {
             interactButton.clicked -= OnInteractButtonClicked;
         }
     }
 
-    // Этот метод Unity 6 вызывает автоматически, когда панель отрисовалась и готова к работе
     private void OnUIReloaded(PanelRenderer renderer, VisualElement rootElement)
     {
         if (rootElement == null) return;
 
-        // Ищем элементы внутри предоставленного Unity корня (rootElement)
         interactButton = rootElement.Q<Button>("InteractBtn");
         dialogueBox = rootElement.Q<VisualElement>("DialogueBox");
 
-        // Настраиваем начальное состояние кнопки взаимодействия
         if (interactButton != null)
         {
+            // Корректируем pickingMode через код для Unity 6 на случай багов UI Builder
+            interactButton.pickingMode = PickingMode.Position;
+
             interactButton.style.display = DisplayStyle.None;
 
-            // Сначала отписываемся (на случай перезагрузки UI), потом подписываемся заново
             interactButton.clicked -= OnInteractButtonClicked;
             interactButton.clicked += OnInteractButtonClicked;
         }
 
-        // Настраиваем начальное состояние окна диалога
         if (dialogueBox != null)
         {
+            dialogueBox.pickingMode = PickingMode.Ignore; // Окно не должно блокировать клики по кнопке
             dialogueBox.style.display = DisplayStyle.None;
         }
     }
@@ -90,26 +83,47 @@ public class DialogueManager : MonoBehaviour
     public void ShowInteractionButton(DialogueZone zone)
     {
         currentActiveZone = zone;
+
         if (interactButton != null)
         {
-            interactButton.style.display = DisplayStyle.Flex; // Показываем кнопку взаимодействия
+            interactButton.style.display = DisplayStyle.Flex;
+            Debug.Log($"[DialogueManager] Кнопка показана для зоны: {zone.name}");
         }
     }
 
-    public void HideInteractionButton()
+    // Изменяем метод: теперь он принимает зону, которая просит её скрыть
+    public void HideInteractionButton(DialogueZone zone)
     {
-        currentActiveZone = null;
-        if (interactButton != null)
+        // КЛЮЧЕВАЯ ЗАЩИТА: Сбрасываем зону только если это ТА ЖЕ САМАЯ зона, что сейчас активна.
+        // Это предотвратит баг, если игрок быстро перебежал из одной зоны в другую.
+        if (currentActiveZone == zone)
         {
-            interactButton.style.display = DisplayStyle.None; // Скрываем кнопку взаимодействия
+            currentActiveZone = null;
+
+            if (interactButton != null)
+            {
+                interactButton.style.display = DisplayStyle.None;
+                Debug.Log($"[DialogueManager] Активная зона сброшена. Кнопка скрыта.");
+            }
         }
     }
 
     private void OnInteractButtonClicked()
     {
+        Debug.Log("[DialogueManager] Клик по кнопке зафиксирован!");
+
         if (currentActiveZone != null)
         {
-            currentActiveZone.TriggerDialogue(); // Запуск диалога через зону
+            // Проверяем, есть ли вообще файл в зоне, из которой мы пытаемся читать
+            // Используем Reflection (отражение), чтобы не менять доступ к переменной в DialogueZone,
+            // либо просто смотрим, что ответит метод StartDialogue
+            Debug.Log($"[DialogueManager] Текущая активная зона: {currentActiveZone.name}. Отправляем запрос на запуск диалога...");
+
+            currentActiveZone.TriggerDialogue();
+        }
+        else
+        {
+            Debug.LogWarning("[DialogueManager] КЛИК БЫЛ, но currentActiveZone равен NULL! Менеджер забыл, в какой зоне стоит игрок.");
         }
     }
 
@@ -125,7 +139,7 @@ public class DialogueManager : MonoBehaviour
             return;
         }
 
-        Debug.Log($"[DialogueManager] Диалог успешно запущен из файла: {dialogueFile.name}");
+        Debug.Log($"[DialogueManager] МЕНЕДЖЕР: Диалог успешно запущен из файла: {dialogueFile.name}");
 
         string fullText = dialogueFile.text;
         string[] lines = fullText.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -135,7 +149,6 @@ public class DialogueManager : MonoBehaviour
             Debug.Log($"[Линия текста]: {line}");
         }
 
-        // Показываем само окно диалога на экране
         if (dialogueBox != null)
         {
             dialogueBox.style.display = DisplayStyle.Flex;
