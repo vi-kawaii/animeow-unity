@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 7949040574329075492}
   m_Layer: 0
   m_Name: Mesh
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -123,7 +123,7 @@ GameObject:
   - component: {fileID: 3819791416093403640}
   m_Layer: 0
   m_Name: PlayerPrefab
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -158,7 +158,7 @@ GameObject:
   - component: {fileID: 8295004275829894724}
   m_Layer: 0
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -225,6 +225,9 @@ MonoBehaviour:
   globalDashCooldown: 1.5
   jumpHeight: 1.3
   gravity: -35
+  farJumpWindow: 0.15
+  farJumpMultiplier: 1.6
+  airInertiaDamping: 2.5
   cameraTransform: {fileID: 0}
 --- !u!1 &8280446590803691211
 GameObject:
@@ -241,7 +244,7 @@ GameObject:
   - component: {fileID: 3961029063583799008}
   m_Layer: 0
   m_Name: ThirdPersonCamera
-  m_TagString: Untagged
+  m_TagString: Player
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
