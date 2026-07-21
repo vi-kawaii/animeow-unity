@@ -13,6 +13,9 @@ public class DialogueManager : MonoBehaviour
     // Ссылка на активную зону триггера
     private DialogueZone currentActiveZone;
 
+    // Переменная для хранения текущего итератора строк диалога
+    private System.Collections.Generic.IEnumerator<DialogueLine> _currentDialogueIterator;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -60,9 +63,7 @@ public class DialogueManager : MonoBehaviour
 
         if (interactButton != null)
         {
-            // Корректируем pickingMode через код для Unity 6 на случай багов UI Builder
             interactButton.pickingMode = PickingMode.Position;
-
             interactButton.style.display = DisplayStyle.None;
 
             interactButton.clicked -= OnInteractButtonClicked;
@@ -71,8 +72,13 @@ public class DialogueManager : MonoBehaviour
 
         if (dialogueBox != null)
         {
-            dialogueBox.pickingMode = PickingMode.Ignore; // Окно не должно блокировать клики по кнопке
+            // Окно теперь ловит клики (pickingMode = Position), чтобы продвигать диалог вперед
+            dialogueBox.pickingMode = PickingMode.Position;
             dialogueBox.style.display = DisplayStyle.None;
+
+            // Регистрируем клик по самому окну для продвижения текста
+            dialogueBox.UnregisterCallback<ClickEvent>(OnDialogueBoxClicked);
+            dialogueBox.RegisterCallback<ClickEvent>(OnDialogueBoxClicked);
         }
     }
 
@@ -91,11 +97,8 @@ public class DialogueManager : MonoBehaviour
         }
     }
 
-    // Изменяем метод: теперь он принимает зону, которая просит её скрыть
     public void HideInteractionButton(DialogueZone zone)
     {
-        // КЛЮЧЕВАЯ ЗАЩИТА: Сбрасываем зону только если это ТА ЖЕ САМАЯ зона, что сейчас активна.
-        // Это предотвратит баг, если игрок быстро перебежал из одной зоны в другую.
         if (currentActiveZone == zone)
         {
             currentActiveZone = null;
@@ -114,16 +117,12 @@ public class DialogueManager : MonoBehaviour
 
         if (currentActiveZone != null)
         {
-            // Проверяем, есть ли вообще файл в зоне, из которой мы пытаемся читать
-            // Используем Reflection (отражение), чтобы не менять доступ к переменной в DialogueZone,
-            // либо просто смотрим, что ответит метод StartDialogue
             Debug.Log($"[DialogueManager] Текущая активная зона: {currentActiveZone.name}. Отправляем запрос на запуск диалога...");
-
             currentActiveZone.TriggerDialogue();
         }
         else
         {
-            Debug.LogWarning("[DialogueManager] КЛИК БЫЛ, но currentActiveZone равен NULL! Менеджер забыл, в какой зоне стоит игрок.");
+            Debug.LogWarning("[DialogueManager] КЛИК БЫЛ, но currentActiveZone равен NULL!");
         }
     }
 
@@ -139,19 +138,72 @@ public class DialogueManager : MonoBehaviour
             return;
         }
 
-        Debug.Log($"[DialogueManager] МЕНЕДЖЕР: Диалог успешно запущен из файла: {dialogueFile.name}");
+        // Превращаем имя файла (например, quest_1) в имя скомпилированного класса (Dialogue_quest_1)
+        string className = "Dialogue_" + dialogueFile.name.Replace(" ", "_").Replace("-", "_");
 
-        string fullText = dialogueFile.text;
-        string[] lines = fullText.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
+        // Ищем этот класс в сборке игры через Рефлексию (HybridCLR полностью это поддерживает в билдax)
+        System.Type type = System.Type.GetType(className);
 
-        foreach (string line in lines)
+        if (type == null)
         {
-            Debug.Log($"[Линия текста]: {line}");
+            Debug.LogError($"[DialogueManager] Ошибка! Класс {className} не найден. Убедись, что файл лежит в Assets/Dialogue/Scripts/ и нажми верхнее меню Tools -> Dialogue System -> Rebuild All Dialogues.");
+            return;
         }
+
+        // Создаем экземпляр сгенерированного класса
+        IDialogueScript dialogueScript = (IDialogueScript)System.Activator.CreateInstance(type);
+
+        Debug.Log($"[DialogueManager] МЕНЕДЖЕР: Диалог успешно запущен из ассета {dialogueFile.name} через класс {className}");
+
+        // Управляем видимостью UI элементов
+        if (interactButton != null) interactButton.style.display = DisplayStyle.None;
+        if (dialogueBox != null) dialogueBox.style.display = DisplayStyle.Flex;
+
+        // Берем итератор реплик и делаем первую реплику
+        _currentDialogueIterator = dialogueScript.GetLines();
+        AdvanceDialogue();
+    }
+
+    private void OnDialogueBoxClicked(ClickEvent evt)
+    {
+        if (_currentDialogueIterator != null)
+        {
+            AdvanceDialogue();
+        }
+    }
+
+    private void AdvanceDialogue()
+    {
+        // Проверяем, есть ли следующая реплика в итераторе
+        if (_currentDialogueIterator != null && _currentDialogueIterator.MoveNext())
+        {
+            DialogueLine currentLine = _currentDialogueIterator.Current;
+
+            // ВЫВОД В КОНСОЛЬ (как вы просили, пока без лейблов)
+            Debug.Log($"[Линия текста] {currentLine.Speaker}: {currentLine.Text}");
+        }
+        else
+        {
+            // Реплики закончились — закрываем окно
+            EndDialogue();
+        }
+    }
+
+    private void EndDialogue()
+    {
+        _currentDialogueIterator = null;
 
         if (dialogueBox != null)
         {
-            dialogueBox.style.display = DisplayStyle.Flex;
+            dialogueBox.style.display = DisplayStyle.None;
         }
+
+        // Если игрок все еще стоит в триггере — возвращаем кнопку "Взаимодействовать"
+        if (currentActiveZone != null && interactButton != null)
+        {
+            interactButton.style.display = DisplayStyle.Flex;
+        }
+
+        Debug.Log("[DialogueManager] Диалог завершен.");
     }
 }
