@@ -1,20 +1,31 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEngine.InputSystem;
 
 public class DialogueManager : MonoBehaviour
 {
     public static DialogueManager Instance { get; private set; }
 
     private PanelRenderer panelRenderer;
-
     private Button interactButton;
     private VisualElement dialogueBox;
+
+    // Ссылки на текстовые элементы внутри DialogueBox
+    private Label speakerNameLabel;
+    private Label dialogueTextLabel;
 
     // Ссылка на активную зону триггера
     private DialogueZone currentActiveZone;
 
     // Переменная для хранения текущего итератора строк диалога
     private System.Collections.Generic.IEnumerator<DialogueLine> _currentDialogueIterator;
+
+    [Header("Настройки Управления (New Input System)")]
+    [SerializeField]
+    private InputActionReference interactActionReference;
+
+    [SerializeField]
+    private InputActionReference nextLineActionReference;
 
     private void Awake()
     {
@@ -39,6 +50,18 @@ public class DialogueManager : MonoBehaviour
         {
             panelRenderer.RegisterUIReloadCallback(OnUIReloaded);
         }
+
+        if (interactActionReference != null)
+        {
+            interactActionReference.action.performed += OnInteractActionTriggered;
+            interactActionReference.action.Enable();
+        }
+
+        if (nextLineActionReference != null)
+        {
+            nextLineActionReference.action.performed += OnNextLineActionTriggered;
+            nextLineActionReference.action.Disable();
+        }
     }
 
     private void OnDisable()
@@ -51,6 +74,16 @@ public class DialogueManager : MonoBehaviour
         if (interactButton != null)
         {
             interactButton.clicked -= OnInteractButtonClicked;
+        }
+
+        if (interactActionReference != null)
+        {
+            interactActionReference.action.performed -= OnInteractActionTriggered;
+        }
+
+        if (nextLineActionReference != null)
+        {
+            nextLineActionReference.action.performed -= OnNextLineActionTriggered;
         }
     }
 
@@ -72,13 +105,38 @@ public class DialogueManager : MonoBehaviour
 
         if (dialogueBox != null)
         {
-            // Окно теперь ловит клики (pickingMode = Position), чтобы продвигать диалог вперед
             dialogueBox.pickingMode = PickingMode.Position;
             dialogueBox.style.display = DisplayStyle.None;
 
-            // Регистрируем клик по самому окну для продвижения текста
+            // Находим текстовые поля внутри DialogueBox для вывода имени и реплики
+            speakerNameLabel = dialogueBox.Q<Label>("SpeakerNameLabel");
+            dialogueTextLabel = dialogueBox.Q<Label>("DialogueTextLabel");
+
             dialogueBox.UnregisterCallback<ClickEvent>(OnDialogueBoxClicked);
             dialogueBox.RegisterCallback<ClickEvent>(OnDialogueBoxClicked);
+        }
+    }
+
+    // ==========================================
+    // ОБРАБОТЧИКИ НАЖАТИЙ КЛАВИШ (NEW INPUT SYSTEM)
+    // ==========================================
+
+    private void OnInteractActionTriggered(InputAction.CallbackContext context)
+    {
+        if (currentActiveZone != null && interactButton != null && interactButton.style.display == DisplayStyle.Flex)
+        {
+            if (_currentDialogueIterator == null)
+            {
+                OnInteractButtonClicked();
+            }
+        }
+    }
+
+    private void OnNextLineActionTriggered(InputAction.CallbackContext context)
+    {
+        if (_currentDialogueIterator != null && dialogueBox != null && dialogueBox.style.display == DisplayStyle.Flex)
+        {
+            AdvanceDialogue();
         }
     }
 
@@ -93,7 +151,6 @@ public class DialogueManager : MonoBehaviour
         if (interactButton != null)
         {
             interactButton.style.display = DisplayStyle.Flex;
-            Debug.Log($"[DialogueManager] Кнопка показана для зоны: {zone.name}");
         }
     }
 
@@ -106,23 +163,15 @@ public class DialogueManager : MonoBehaviour
             if (interactButton != null)
             {
                 interactButton.style.display = DisplayStyle.None;
-                Debug.Log($"[DialogueManager] Активная зона сброшена. Кнопка скрыта.");
             }
         }
     }
 
     private void OnInteractButtonClicked()
     {
-        Debug.Log("[DialogueManager] Клик по кнопке зафиксирован!");
-
         if (currentActiveZone != null)
         {
-            Debug.Log($"[DialogueManager] Текущая активная зона: {currentActiveZone.name}. Отправляем запрос на запуск диалога...");
             currentActiveZone.TriggerDialogue();
-        }
-        else
-        {
-            Debug.LogWarning("[DialogueManager] КЛИК БЫЛ, но currentActiveZone равен NULL!");
         }
     }
 
@@ -138,28 +187,23 @@ public class DialogueManager : MonoBehaviour
             return;
         }
 
-        // Превращаем имя файла (например, quest_1) в имя скомпилированного класса (Dialogue_quest_1)
         string className = "Dialogue_" + dialogueFile.name.Replace(" ", "_").Replace("-", "_");
-
-        // Ищем этот класс в сборке игры через Рефлексию (HybridCLR полностью это поддерживает в билдax)
         System.Type type = System.Type.GetType(className);
 
         if (type == null)
         {
-            Debug.LogError($"[DialogueManager] Ошибка! Класс {className} не найден. Убедись, что файл лежит в Assets/Dialogue/Scripts/ и нажми верхнее меню Tools -> Dialogue System -> Rebuild All Dialogues.");
+            Debug.LogError($"[DialogueManager] Ошибка! Класс {className} не найден.");
             return;
         }
 
-        // Создаем экземпляр сгенерированного класса
         IDialogueScript dialogueScript = (IDialogueScript)System.Activator.CreateInstance(type);
 
-        Debug.Log($"[DialogueManager] МЕНЕДЖЕР: Диалог успешно запущен из ассета {dialogueFile.name} через класс {className}");
-
-        // Управляем видимостью UI элементов
         if (interactButton != null) interactButton.style.display = DisplayStyle.None;
         if (dialogueBox != null) dialogueBox.style.display = DisplayStyle.Flex;
 
-        // Берем итератор реплик и делаем первую реплику
+        if (interactActionReference != null) interactActionReference.action.Disable();
+        if (nextLineActionReference != null) nextLineActionReference.action.Enable();
+
         _currentDialogueIterator = dialogueScript.GetLines();
         AdvanceDialogue();
     }
@@ -174,17 +218,28 @@ public class DialogueManager : MonoBehaviour
 
     private void AdvanceDialogue()
     {
-        // Проверяем, есть ли следующая реплика в итераторе
         if (_currentDialogueIterator != null && _currentDialogueIterator.MoveNext())
         {
             DialogueLine currentLine = _currentDialogueIterator.Current;
 
-            // ВЫВОД В КОНСОЛЬ (как вы просили, пока без лейблов)
-            Debug.Log($"[Линия текста] {currentLine.Speaker}: {currentLine.Text}");
+            // ВЫВОД НА ЭКРАН ИГРЫ: Передаем имя и текст в UI Toolkit элементы
+            if (speakerNameLabel != null)
+            {
+                speakerNameLabel.text = currentLine.Speaker;
+                // Скрываем плашку имени, если автора у реплики нет (например, системное сообщение)
+                speakerNameLabel.style.display = string.IsNullOrEmpty(currentLine.Speaker) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+
+            if (dialogueTextLabel != null)
+            {
+                dialogueTextLabel.text = currentLine.Text;
+            }
+
+            // Оставляем лог в консоли чисто для подстраховки
+            Debug.Log($"[Показ на экране] {currentLine.Speaker}: {currentLine.Text}");
         }
         else
         {
-            // Реплики закончились — закрываем окно
             EndDialogue();
         }
     }
@@ -193,12 +248,14 @@ public class DialogueManager : MonoBehaviour
     {
         _currentDialogueIterator = null;
 
+        if (nextLineActionReference != null) nextLineActionReference.action.Disable();
+        if (interactActionReference != null) interactActionReference.action.Enable();
+
         if (dialogueBox != null)
         {
             dialogueBox.style.display = DisplayStyle.None;
         }
 
-        // Если игрок все еще стоит в триггере — возвращаем кнопку "Взаимодействовать"
         if (currentActiveZone != null && interactButton != null)
         {
             interactButton.style.display = DisplayStyle.Flex;

@@ -1,4 +1,20 @@
 <ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
-    <ui:Button text="Button" name="InteractBtn"/>
-    <ui:VisualElement name="DialogueBox" style="flex-grow: 1;"/>
+    <!-- Кнопка взаимодействия -->
+    <ui:Button text="Button" name="InteractBtn" />
+    
+    <!-- Окно диалога (растянуто на весь экран) -->
+    <ui:VisualElement name="DialogueBox" style="flex-grow: 1; justify-content: flex-end; align-items: center; padding-bottom: 50px;">
+        
+        <!-- Полупрозрачная плашка для текста (подложка диалога) -->
+        <ui:VisualElement name="DialoguePanel" style="background-color: rgba(0, 0, 0, 0.85); width: 60%; min-height: 150px; padding: 20px; border-radius: 10px; border-width: 1px; border-color: rgba(255, 255, 255, 0.1);">
+            
+            <!-- Имя персонажа -->
+            <ui:Label text="Имя Персонажа" name="SpeakerNameLabel" style="color: rgb(255, 204, 0); -unity-font-style: bold; font-size: 22px; margin-bottom: 10px;" />
+            
+            <!-- Текст реплики -->
+            <ui:Label text="Здесь будет отображаться текст диалога..." name="DialogueTextLabel" style="color: rgb(255, 255, 255); font-size: 18px; white-space: normal;" />
+            
+        </ui:VisualElement>
+        
+    </ui:VisualElement>
 </ui:UXML>
